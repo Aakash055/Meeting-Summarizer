@@ -58,6 +58,15 @@ Transcript:
 {transcript_text}
 """
 
+FINAL_SUMMARY_PROMPT_TEMPLATE = """You are combining several partial summaries from different segments of the same meeting/lecture into one coherent overall summary.
+
+Here are the segment summaries, in order:
+
+{combined_summaries}
+
+Write ONE cohesive summary (3-5 sentences) of the entire meeting/lecture based on all the segments above. Respond with ONLY the summary text, no JSON, no extra formatting.
+"""
+
 
 def estimate_tokens(text: str) -> int:
     return len(text) // 4
@@ -100,6 +109,43 @@ def summarize_chunk(transcript_text: str) -> dict:
         raw_text = raw_text.replace("json", "", 1).strip()
 
     return json.loads(raw_text)
+
+
+def merge_chunk_results(chunk_results: list) -> dict:
+    if len(chunk_results) == 1:
+        return chunk_results[0]
+
+    all_key_points = []
+    all_decisions = []
+    all_action_items = []
+    all_topics = []
+
+    for result in chunk_results:
+        all_key_points.extend(result.get("key_points", []))
+        all_decisions.extend(result.get("decisions", []))
+        all_action_items.extend(result.get("action_items", []))
+        all_topics.extend(result.get("topics", []))
+
+    unique_topics = list(dict.fromkeys(all_topics))
+
+    summaries_text = "\n".join(
+        f"Segment {i + 1}: {result['summary']}"
+        for i, result in enumerate(chunk_results)
+    )
+    final_summary_prompt = FINAL_SUMMARY_PROMPT_TEMPLATE.format(combined_summaries=summaries_text)
+
+    response = gemini_client.models.generate_content(
+        model="gemini-3.6-flash",
+        contents=final_summary_prompt
+    )
+
+    return {
+        "summary": response.text.strip(),
+        "key_points": all_key_points,
+        "decisions": all_decisions,
+        "action_items": all_action_items,
+        "topics": unique_topics
+    }
 
 
 @app.get("/")
@@ -146,11 +192,17 @@ async def upload_file(file: UploadFile = File(...)):
         summary_data = summarize_chunk(combined_text)
         chunk_results.append(summary_data)
 
+    final_result = merge_chunk_results(chunk_results)
+
     return {
         "filename": file.filename,
         "content_type": file.content_type,
         "size_bytes": len(content),
         "transcript_text": result["text"],
         "segments": segments,
-        "chunk_summaries": chunk_results
+        "summary": final_result["summary"],
+        "key_points": final_result["key_points"],
+        "decisions": final_result["decisions"],
+        "action_items": final_result["action_items"],
+        "topics": final_result["topics"]
     }
