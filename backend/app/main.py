@@ -1,6 +1,11 @@
 import os
+import json
 import whisper
+from dotenv import load_dotenv
+from google import genai
 from fastapi import FastAPI, UploadFile, File, HTTPException
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -22,6 +27,36 @@ MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 print("Loading Whisper model... (this happens once at startup)")
 whisper_model = whisper.load_model("base")
 print("Whisper model loaded.")
+
+gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+SUMMARY_PROMPT_TEMPLATE = """You are analyzing a transcript segment from a meeting or lecture.
+
+Read the transcript below and extract the following information. Respond ONLY with valid JSON, no other text, no markdown code fences.
+
+{{
+  "summary": "A 2-3 sentence summary of what was discussed in this segment",
+  "key_points": ["list", "of", "key discussion points as short strings"],
+  "decisions": ["list of any decisions that were made, as short strings"],
+  "action_items": [
+    {{
+      "task": "description of the task",
+      "assignee": "person's name if mentioned, otherwise 'Not specified'",
+      "deadline": "deadline if mentioned, otherwise 'Not specified'",
+      "source": "the exact sentence from the transcript this was extracted from"
+    }}
+  ],
+  "topics": ["list", "of", "topic names mentioned"]
+}}
+
+Important rules:
+- If no action items are mentioned, return an empty list for "action_items".
+- Never invent an assignee or deadline that isn't explicitly stated in the transcript.
+- Keep "summary" concise, 2-3 sentences maximum.
+
+Transcript:
+{transcript_text}
+"""
 
 
 def estimate_tokens(text: str) -> int:
@@ -48,6 +83,23 @@ def chunk_segments(segments, max_tokens_per_chunk=1500):
         chunks.append(current_chunk_segments)
 
     return chunks
+
+
+def summarize_chunk(transcript_text: str) -> dict:
+    prompt = SUMMARY_PROMPT_TEMPLATE.format(transcript_text=transcript_text)
+
+    response = gemini_client.models.generate_content(
+        model="gemini-3.6-flash",
+        contents=prompt
+    )
+
+    raw_text = response.text.strip()
+
+    if raw_text.startswith("```"):
+        raw_text = raw_text.strip("`")
+        raw_text = raw_text.replace("json", "", 1).strip()
+
+    return json.loads(raw_text)
 
 
 @app.get("/")
@@ -88,15 +140,11 @@ async def upload_file(file: UploadFile = File(...)):
 
     chunks = chunk_segments(segments, max_tokens_per_chunk=1500)
 
-    chunk_summaries_preview = [
-        {
-            "chunk_number": i + 1,
-            "segment_count": len(chunk),
-            "estimated_tokens": sum(estimate_tokens(s["text"]) for s in chunk),
-            "combined_text": " ".join(s["text"] for s in chunk)
-        }
-        for i, chunk in enumerate(chunks)
-    ]
+    chunk_results = []
+    for chunk in chunks:
+        combined_text = " ".join(s["text"] for s in chunk)
+        summary_data = summarize_chunk(combined_text)
+        chunk_results.append(summary_data)
 
     return {
         "filename": file.filename,
@@ -104,5 +152,5 @@ async def upload_file(file: UploadFile = File(...)):
         "size_bytes": len(content),
         "transcript_text": result["text"],
         "segments": segments,
-        "chunks_preview": chunk_summaries_preview
+        "chunk_summaries": chunk_results
     }
