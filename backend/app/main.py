@@ -23,9 +23,37 @@ print("Loading Whisper model... (this happens once at startup)")
 whisper_model = whisper.load_model("base")
 print("Whisper model loaded.")
 
+
+def estimate_tokens(text: str) -> int:
+    return len(text) // 4
+
+
+def chunk_segments(segments, max_tokens_per_chunk=1500):
+    chunks = []
+    current_chunk_segments = []
+    current_chunk_tokens = 0
+
+    for segment in segments:
+        segment_tokens = estimate_tokens(segment["text"])
+
+        if current_chunk_tokens + segment_tokens > max_tokens_per_chunk and current_chunk_segments:
+            chunks.append(current_chunk_segments)
+            current_chunk_segments = []
+            current_chunk_tokens = 0
+
+        current_chunk_segments.append(segment)
+        current_chunk_tokens += segment_tokens
+
+    if current_chunk_segments:
+        chunks.append(current_chunk_segments)
+
+    return chunks
+
+
 @app.get("/")
 def read_root():
     return {"message": "Meeting Summarizer API is running"}
+
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -58,10 +86,23 @@ async def upload_file(file: UploadFile = File(...)):
         for segment in result["segments"]
     ]
 
+    chunks = chunk_segments(segments, max_tokens_per_chunk=1500)
+
+    chunk_summaries_preview = [
+        {
+            "chunk_number": i + 1,
+            "segment_count": len(chunk),
+            "estimated_tokens": sum(estimate_tokens(s["text"]) for s in chunk),
+            "combined_text": " ".join(s["text"] for s in chunk)
+        }
+        for i, chunk in enumerate(chunks)
+    ]
+
     return {
         "filename": file.filename,
         "content_type": file.content_type,
         "size_bytes": len(content),
         "transcript_text": result["text"],
-        "segments": segments
+        "segments": segments,
+        "chunks_preview": chunk_summaries_preview
     }
