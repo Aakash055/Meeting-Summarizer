@@ -1,4 +1,5 @@
 import os
+import whisper
 from fastapi import FastAPI, UploadFile, File, HTTPException
 
 app = FastAPI()
@@ -17,6 +18,10 @@ ALLOWED_CONTENT_TYPES = {
 
 MAX_FILE_SIZE_MB = 200
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
+print("Loading Whisper model... (this happens once at startup)")
+whisper_model = whisper.load_model("base")
+print("Whisper model loaded.")
 
 @app.get("/")
 def read_root():
@@ -42,8 +47,21 @@ async def upload_file(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         buffer.write(content)
 
+    result = whisper_model.transcribe(file_path)
+
+    segments = [
+        {
+            "start": segment["start"],
+            "end": segment["end"],
+            "text": segment["text"].strip()
+        }
+        for segment in result["segments"]
+    ]
+
     return {
         "filename": file.filename,
         "content_type": file.content_type,
-        "size_bytes": len(content)
+        "size_bytes": len(content),
+        "transcript_text": result["text"],
+        "segments": segments
     }
