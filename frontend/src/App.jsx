@@ -13,6 +13,10 @@ function App() {
   const [isLoadingMeetings, setIsLoadingMeetings] = useState(false)
   const [selectedMeeting, setSelectedMeeting] = useState(null)
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
 
   useEffect(() => {
     if (view === 'dashboard') {
@@ -48,6 +52,24 @@ function App() {
       console.error('Failed to load meeting:', err)
     } finally {
       setIsLoadingDetail(false)
+    }
+  }
+
+  async function handleSearch(event) {
+    event.preventDefault()
+    if (!searchQuery.trim()) return
+
+    setIsSearching(true)
+    setHasSearched(true)
+    try {
+      const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(searchQuery)}`)
+      const data = await response.json()
+      setSearchResults(data)
+    } catch (err) {
+      console.error('Search failed:', err)
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
     }
   }
 
@@ -174,6 +196,12 @@ function App() {
             Dashboard
           </button>
           <button
+            className={view === 'search' ? 'nav-active' : ''}
+            onClick={() => setView('search')}
+          >
+            Search
+          </button>
+          <button
             className={view === 'upload' ? 'nav-active' : ''}
             onClick={() => setView('upload')}
           >
@@ -209,6 +237,42 @@ function App() {
                 <p className="meeting-summary-preview">
                   {meeting.summary ? meeting.summary.slice(0, 150) + '...' : 'No summary available.'}
                 </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'search' && (
+        <div className="search-section">
+          <form onSubmit={handleSearch} className="search-form">
+            <input
+              type="text"
+              placeholder="Search across all your transcripts..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <button type="submit" disabled={isSearching}>
+              {isSearching ? 'Searching...' : 'Search'}
+            </button>
+          </form>
+
+          {hasSearched && !isSearching && searchResults.length === 0 && (
+            <p>No matches found for "{searchQuery}".</p>
+          )}
+
+          <div className="search-results-list">
+            {searchResults.map((res, index) => (
+              <div
+                key={index}
+                className="search-result-card"
+                onClick={() => openMeeting(res.meeting_id)}
+              >
+                <div className="search-result-header">
+                  <strong>{res.meeting_filename}</strong>
+                  <span className="timestamp">[{formatTime(res.start_time)}]</span>
+                </div>
+                <p className="search-result-text">{res.text}</p>
               </div>
             ))}
           </div>

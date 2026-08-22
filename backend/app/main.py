@@ -324,3 +324,30 @@ def get_meeting(meeting_id: int, db: Session = Depends(get_db)):
             for a in meeting.action_items
         ]
     }
+
+
+@app.get("/search")
+def search_transcripts(q: str, db: Session = Depends(get_db)):
+    if not q or len(q.strip()) == 0:
+        return []
+
+    search_term = f"%{q.strip()}%"
+
+    matching_segments = (
+        db.query(TranscriptSegment)
+        .join(Meeting)
+        .filter(TranscriptSegment.text.ilike(search_term))
+        .order_by(Meeting.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    return [
+        {
+            "meeting_id": seg.meeting_id,
+            "meeting_filename": seg.meeting.filename,
+            "start_time": seg.start_time,
+            "text": seg.text
+        }
+        for seg in matching_segments
+    ]
