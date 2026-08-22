@@ -1,121 +1,105 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState(null)
+
+  function handleFileChange(event) {
+    setSelectedFile(event.target.files[0])
+    setResult(null)
+    setError(null)
+  }
+
+  async function handleUpload() {
+    if (!selectedFile) {
+      setError('Please select a file first.')
+      return
+    }
+
+    setIsUploading(true)
+    setError(null)
+    setResult(null)
+
+    const formData = new FormData()
+    formData.append('file', selectedFile)
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Upload failed')
+      }
+
+      const data = await response.json()
+      setResult(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsUploading(false)
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
+    <div className="app-container">
+      <h1>Meeting Summarizer</h1>
+
+      <div className="upload-section">
+        <input type="file" accept="audio/*,video/*" onChange={handleFileChange} />
+        <button onClick={handleUpload} disabled={isUploading}>
+          {isUploading ? 'Processing...' : 'Upload & Summarize'}
         </button>
-      </section>
+      </div>
 
-      <div className="ticks"></div>
+      {error && <p className="error-message">{error}</p>}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
+      {result && (
+        <div className="results-section">
+          <h2>Summary</h2>
+          <p>{result.summary}</p>
+
+          <h2>Key Points</h2>
           <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
+            {result.key_points.map((point, index) => (
+              <li key={index}>{point}</li>
+            ))}
           </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+          <h2>Decisions</h2>
+          {result.decisions.length === 0 ? (
+            <p>No decisions recorded.</p>
+          ) : (
+            <ul>
+              {result.decisions.map((decision, index) => (
+                <li key={index}>{decision}</li>
+              ))}
+            </ul>
+          )}
+
+          <h2>Action Items</h2>
+          {result.action_items.length === 0 ? (
+            <p>No action items found.</p>
+          ) : (
+            <ul>
+              {result.action_items.map((item, index) => (
+                <li key={index}>
+                  <strong>{item.task}</strong> — Assigned to: {item.assignee}, Deadline: {item.deadline}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <h2>Topics</h2>
+          <p>{result.topics.join(', ')}</p>
+        </div>
+      )}
+    </div>
   )
 }
 
