@@ -4,14 +4,27 @@ from datetime import datetime, timezone
 from app.database import Base
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    hashed_password = Column(String, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    meetings = relationship("Meeting", back_populates="owner", cascade="all, delete-orphan")
+
+
 class Meeting(Base):
     __tablename__ = "meetings"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     filename = Column(String, nullable=False)
     status = Column(String, default="processing")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    owner = relationship("User", back_populates="meetings")
     segments = relationship("TranscriptSegment", back_populates="meeting", cascade="all, delete-orphan")
     summary = relationship("Summary", back_populates="meeting", uselist=False, cascade="all, delete-orphan")
     topics = relationship("Topic", back_populates="meeting", cascade="all, delete-orphan")

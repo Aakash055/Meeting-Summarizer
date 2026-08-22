@@ -3,12 +3,14 @@ import json
 import whisper
 from dotenv import load_dotenv
 from google import genai
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import engine, Base, get_db
-from app.models import Meeting, TranscriptSegment, Summary, Topic, Decision, ActionItem, KeyPoint
+from app.models import Meeting, TranscriptSegment, Summary, Topic, Decision, ActionItem, KeyPoint, User
+from app.schemas import UserRegister, UserLogin, TokenResponse
+from app.auth import hash_password, verify_password, create_access_token, decode_access_token
 
 load_dotenv()
 
@@ -167,13 +169,60 @@ def merge_chunk_results(chunk_results: list) -> dict:
     }
 
 
+def get_current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> User:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    token = authorization.replace("Bearer ", "")
+    user_id = decode_access_token(token)
+
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user
+
+
 @app.get("/")
 def read_root():
     return {"message": "Meeting Summarizer API is running"}
 
 
+@app.post("/register", response_model=TokenResponse)
+def register(user_data: UserRegister, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.email == user_data.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    new_user = User(email=user_data.email, hashed_password=hash_password(user_data.password))
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    token = create_access_token(new_user.id)
+    return {"access_token": token, "token_type": "bearer"}
+
+
+@app.post("/login", response_model=TokenResponse)
+def login(credentials: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == credentials.email).first()
+
+    if not user or not verify_password(credentials.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    token = create_access_token(user.id)
+    return {"access_token": token, "token_type": "bearer"}
+
+
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=400,
@@ -192,7 +241,7 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
     with open(file_path, "wb") as buffer:
         buffer.write(content)
 
-    meeting = Meeting(filename=file.filename, status="processing")
+    meeting = Meeting(filename=file.filename, status="processing", user_id=current_user.id)
     db.add(meeting)
     db.commit()
     db.refresh(meeting)
@@ -267,8 +316,14 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
 
 
 @app.get("/meetings")
-def list_meetings(db: Session = Depends(get_db)):
-    meetings = db.query(Meeting).options(joinedload(Meeting.summary)).order_by(Meeting.created_at.desc()).all()
+def list_meetings(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    meetings = (
+        db.query(Meeting)
+        .options(joinedload(Meeting.summary))
+        .filter(Meeting.user_id == current_user.id)
+        .order_by(Meeting.created_at.desc())
+        .all()
+    )
 
     return [
         {
@@ -283,7 +338,7 @@ def list_meetings(db: Session = Depends(get_db)):
 
 
 @app.get("/meetings/{meeting_id}")
-def get_meeting(meeting_id: int, db: Session = Depends(get_db)):
+def get_meeting(meeting_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     meeting = (
         db.query(Meeting)
         .options(
@@ -294,7 +349,7 @@ def get_meeting(meeting_id: int, db: Session = Depends(get_db)):
             joinedload(Meeting.action_items),
             joinedload(Meeting.key_points),
         )
-        .filter(Meeting.id == meeting_id)
+        .filter(Meeting.id == meeting_id, Meeting.user_id == current_user.id)
         .first()
     )
 
@@ -327,7 +382,7 @@ def get_meeting(meeting_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/search")
-def search_transcripts(q: str, db: Session = Depends(get_db)):
+def search_transcripts(q: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if not q or len(q.strip()) == 0:
         return []
 
@@ -336,7 +391,7 @@ def search_transcripts(q: str, db: Session = Depends(get_db)):
     matching_segments = (
         db.query(TranscriptSegment)
         .join(Meeting)
-        .filter(TranscriptSegment.text.ilike(search_term))
+        .filter(Meeting.user_id == current_user.id, TranscriptSegment.text.ilike(search_term))
         .order_by(Meeting.created_at.desc())
         .limit(50)
         .all()
