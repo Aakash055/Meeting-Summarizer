@@ -4,6 +4,13 @@ import './App.css'
 const API_BASE = 'http://127.0.0.1:8000'
 
 function App() {
+  const [token, setToken] = useState(localStorage.getItem('token'))
+  const [authView, setAuthView] = useState('login')
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authError, setAuthError] = useState(null)
+  const [isAuthLoading, setIsAuthLoading] = useState(false)
+
   const [view, setView] = useState('dashboard')
   const [selectedFile, setSelectedFile] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -19,15 +26,63 @@ function App() {
   const [hasSearched, setHasSearched] = useState(false)
 
   useEffect(() => {
-    if (view === 'dashboard') {
+    if (view === 'dashboard' && token) {
       loadMeetings()
     }
-  }, [view])
+  }, [view, token])
+
+  function authHeaders() {
+    return { Authorization: `Bearer ${token}` }
+  }
+
+  async function handleAuthSubmit(event) {
+    event.preventDefault()
+    setIsAuthLoading(true)
+    setAuthError(null)
+
+    const endpoint = authView === 'login' ? '/login' : '/register'
+
+    try {
+      const response = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: authEmail, password: authPassword }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Authentication failed')
+      }
+
+      localStorage.setItem('token', data.access_token)
+      setToken(data.access_token)
+      setAuthEmail('')
+      setAuthPassword('')
+    } catch (err) {
+      setAuthError(err.message)
+    } finally {
+      setIsAuthLoading(false)
+    }
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('token')
+    setToken(null)
+    setMeetings([])
+    setResult(null)
+    setSelectedMeeting(null)
+    setView('dashboard')
+  }
 
   async function loadMeetings() {
     setIsLoadingMeetings(true)
     try {
-      const response = await fetch(`${API_BASE}/meetings`)
+      const response = await fetch(`${API_BASE}/meetings`, { headers: authHeaders() })
+      if (response.status === 401) {
+        handleLogout()
+        return
+      }
       const data = await response.json()
       setMeetings(data)
     } catch (err) {
@@ -42,7 +97,7 @@ function App() {
     setSelectedMeeting(null)
     setView('detail')
     try {
-      const response = await fetch(`${API_BASE}/meetings/${meetingId}`)
+      const response = await fetch(`${API_BASE}/meetings/${meetingId}`, { headers: authHeaders() })
       if (!response.ok) {
         throw new Error('Meeting not found')
       }
@@ -62,7 +117,9 @@ function App() {
     setIsSearching(true)
     setHasSearched(true)
     try {
-      const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(searchQuery)}`)
+      const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(searchQuery)}`, {
+        headers: authHeaders(),
+      })
       const data = await response.json()
       setSearchResults(data)
     } catch (err) {
@@ -95,6 +152,7 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/upload`, {
         method: 'POST',
+        headers: authHeaders(),
         body: formData,
       })
 
@@ -184,6 +242,52 @@ function App() {
     )
   }
 
+  if (!token) {
+    return (
+      <div className="app-container auth-container">
+        <h1>Meeting Summarizer</h1>
+        <div className="auth-box">
+          <div className="auth-tabs">
+            <button
+              className={authView === 'login' ? 'nav-active' : ''}
+              onClick={() => { setAuthView('login'); setAuthError(null) }}
+            >
+              Login
+            </button>
+            <button
+              className={authView === 'register' ? 'nav-active' : ''}
+              onClick={() => { setAuthView('register'); setAuthError(null) }}
+            >
+              Register
+            </button>
+          </div>
+
+          <form onSubmit={handleAuthSubmit} className="auth-form">
+            <input
+              type="email"
+              placeholder="Email"
+              value={authEmail}
+              onChange={(e) => setAuthEmail(e.target.value)}
+              required
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={authPassword}
+              onChange={(e) => setAuthPassword(e.target.value)}
+              required
+            />
+            <button type="submit" disabled={isAuthLoading}>
+              {isAuthLoading ? 'Please wait...' : authView === 'login' ? 'Login' : 'Register'}
+            </button>
+          </form>
+
+          {authError && <p className="error-message">{authError}</p>}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="app-container">
       <div className="nav-bar">
@@ -207,6 +311,7 @@ function App() {
           >
             Upload New
           </button>
+          <button onClick={handleLogout}>Logout</button>
         </div>
       </div>
 

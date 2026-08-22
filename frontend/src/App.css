@@ -6,6 +6,61 @@
   text-align: left;
 }
 
+.auth-container {
+  max-width: 400px;
+  padding-top: 4rem;
+}
+
+.auth-box {
+  margin-top: 2rem;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.auth-tabs button {
+  flex: 1;
+  padding: 0.6rem;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: inherit;
+}
+
+.auth-tabs button.nav-active {
+  background-color: #7c8aff;
+  border-color: #7c8aff;
+  color: #fff;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.auth-form input {
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background-color: #1e1e1e;
+  color: inherit;
+}
+
+.auth-form button {
+  padding: 0.6rem;
+  cursor: pointer;
+  background-color: #7c8aff;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 500;
+}
+
 .nav-bar {
   display: flex;
   justify-content: space-between;
