@@ -277,3 +277,45 @@ def list_meetings(db: Session = Depends(get_db)):
         }
         for m in meetings
     ]
+
+
+@app.get("/meetings/{meeting_id}")
+def get_meeting(meeting_id: int, db: Session = Depends(get_db)):
+    meeting = (
+        db.query(Meeting)
+        .options(
+            joinedload(Meeting.summary),
+            joinedload(Meeting.segments),
+            joinedload(Meeting.topics),
+            joinedload(Meeting.decisions),
+            joinedload(Meeting.action_items),
+        )
+        .filter(Meeting.id == meeting_id)
+        .first()
+    )
+
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    return {
+        "id": meeting.id,
+        "filename": meeting.filename,
+        "status": meeting.status,
+        "created_at": meeting.created_at.isoformat(),
+        "summary": meeting.summary.summary_text if meeting.summary else None,
+        "segments": [
+            {"start": s.start_time, "end": s.end_time, "text": s.text}
+            for s in sorted(meeting.segments, key=lambda s: s.start_time)
+        ],
+        "topics": [t.name for t in meeting.topics],
+        "decisions": [d.text for d in meeting.decisions],
+        "action_items": [
+            {
+                "task": a.task,
+                "assignee": a.assignee,
+                "deadline": a.deadline,
+                "source": a.source
+            }
+            for a in meeting.action_items
+        ]
+    }
