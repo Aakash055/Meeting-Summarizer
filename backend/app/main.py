@@ -52,6 +52,10 @@ Read the transcript below and extract the following information. Respond ONLY wi
 Important rules:
 - If no action items are mentioned, return an empty list for "action_items".
 - Never invent an assignee or deadline that isn't explicitly stated in the transcript.
+- If the speaker assigns a task to themselves (e.g. "I'll do it", "I will handle that", "I'm going to..."), set "assignee" to "Speaker (self-assigned)".
+- If multiple people are assigned to one task, list all their names together in "assignee" (e.g. "Mark and Priya").
+- Only extract genuine tasks or commitments as action items. Do not extract complaints, observations, or general statements that don't involve someone doing something (e.g. "the wifi has been down" is not an action item).
+- Vague future intentions without a real commitment (e.g. "we should think about X at some point, no rush") may be omitted from action_items if there's no clear task or owner - use judgment.
 - Keep "summary" concise, 2-3 sentences maximum.
 
 Transcript:
