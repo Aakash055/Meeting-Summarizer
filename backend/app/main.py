@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from google import genai
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import engine, Base, get_db
 from app.models import Meeting, TranscriptSegment, Summary, Topic, Decision, ActionItem
@@ -261,3 +261,19 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
         "action_items": final_result["action_items"],
         "topics": final_result["topics"]
     }
+
+
+@app.get("/meetings")
+def list_meetings(db: Session = Depends(get_db)):
+    meetings = db.query(Meeting).options(joinedload(Meeting.summary)).order_by(Meeting.created_at.desc()).all()
+
+    return [
+        {
+            "id": m.id,
+            "filename": m.filename,
+            "status": m.status,
+            "created_at": m.created_at.isoformat(),
+            "summary": m.summary.summary_text if m.summary else None
+        }
+        for m in meetings
+    ]
