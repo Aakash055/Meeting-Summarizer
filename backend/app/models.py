@@ -17,6 +17,7 @@ class Meeting(Base):
     topics = relationship("Topic", back_populates="meeting", cascade="all, delete-orphan")
     decisions = relationship("Decision", back_populates="meeting", cascade="all, delete-orphan")
     action_items = relationship("ActionItem", back_populates="meeting", cascade="all, delete-orphan")
+    key_points = relationship("KeyPoint", back_populates="meeting", cascade="all, delete-orphan")
 
 
 class TranscriptSegment(Base):
@@ -72,3 +73,13 @@ class ActionItem(Base):
     source = Column(Text, nullable=True)
 
     meeting = relationship("Meeting", back_populates="action_items")
+
+
+class KeyPoint(Base):
+    __tablename__ = "key_points"
+
+    id = Column(Integer, primary_key=True, index=True)
+    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False)
+    text = Column(String, nullable=False)
+
+    meeting = relationship("Meeting", back_populates="key_points")

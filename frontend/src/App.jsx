@@ -11,6 +11,8 @@ function App() {
   const [error, setError] = useState(null)
   const [meetings, setMeetings] = useState([])
   const [isLoadingMeetings, setIsLoadingMeetings] = useState(false)
+  const [selectedMeeting, setSelectedMeeting] = useState(null)
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false)
 
   useEffect(() => {
     if (view === 'dashboard') {
@@ -28,6 +30,24 @@ function App() {
       console.error('Failed to load meetings:', err)
     } finally {
       setIsLoadingMeetings(false)
+    }
+  }
+
+  async function openMeeting(meetingId) {
+    setIsLoadingDetail(true)
+    setSelectedMeeting(null)
+    setView('detail')
+    try {
+      const response = await fetch(`${API_BASE}/meetings/${meetingId}`)
+      if (!response.ok) {
+        throw new Error('Meeting not found')
+      }
+      const data = await response.json()
+      setSelectedMeeting(data)
+    } catch (err) {
+      console.error('Failed to load meeting:', err)
+    } finally {
+      setIsLoadingDetail(false)
     }
   }
 
@@ -80,6 +100,68 @@ function App() {
     })
   }
 
+  function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  function renderResultsBlock(data) {
+    return (
+      <div className="results-section">
+        <h2>Summary</h2>
+        <p>{data.summary}</p>
+
+        <h2>Key Points</h2>
+        {data.key_points && data.key_points.length > 0 ? (
+          <ul>
+            {data.key_points.map((point, index) => (
+              <li key={index}>{point}</li>
+            ))}
+          </ul>
+        ) : (
+          <p>No key points recorded.</p>
+        )}
+
+        <h2>Decisions</h2>
+        {data.decisions.length === 0 ? (
+          <p>No decisions recorded.</p>
+        ) : (
+          <ul>
+            {data.decisions.map((decision, index) => (
+              <li key={index}>{decision}</li>
+            ))}
+          </ul>
+        )}
+
+        <h2>Action Items</h2>
+        {data.action_items.length === 0 ? (
+          <p>No action items found.</p>
+        ) : (
+          <ul>
+            {data.action_items.map((item, index) => (
+              <li key={index}>
+                <strong>{item.task}</strong> — Assigned to: {item.assignee}, Deadline: {item.deadline}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <h2>Topics</h2>
+        <p>{data.topics.join(', ')}</p>
+
+        <h2>Timestamped Transcript</h2>
+        <div className="transcript-box">
+          {data.segments.map((segment, index) => (
+            <p key={index} className="transcript-line">
+              <span className="timestamp">[{formatTime(segment.start)}]</span> {segment.text}
+            </p>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="app-container">
       <div className="nav-bar">
@@ -112,7 +194,11 @@ function App() {
 
           <div className="meetings-list">
             {meetings.map((meeting) => (
-              <div key={meeting.id} className="meeting-card">
+              <div
+                key={meeting.id}
+                className="meeting-card meeting-card-clickable"
+                onClick={() => openMeeting(meeting.id)}
+              >
                 <div className="meeting-card-header">
                   <strong>{meeting.filename}</strong>
                   <span className={`status-badge status-${meeting.status}`}>
@@ -126,6 +212,28 @@ function App() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {view === 'detail' && (
+        <div className="detail-view">
+          <button className="back-button" onClick={() => setView('dashboard')}>
+            ← Back to Dashboard
+          </button>
+
+          {isLoadingDetail && <p>Loading meeting details...</p>}
+
+          {!isLoadingDetail && !selectedMeeting && (
+            <p className="error-message">Could not load this meeting.</p>
+          )}
+
+          {!isLoadingDetail && selectedMeeting && (
+            <>
+              <h2 className="detail-filename">{selectedMeeting.filename}</h2>
+              <p className="meeting-date">{formatDate(selectedMeeting.created_at)}</p>
+              {renderResultsBlock(selectedMeeting)}
+            </>
+          )}
         </div>
       )}
 
@@ -147,65 +255,11 @@ function App() {
 
           {error && <p className="error-message">{error}</p>}
 
-          {result && (
-            <div className="results-section">
-              <h2>Summary</h2>
-              <p>{result.summary}</p>
-
-              <h2>Key Points</h2>
-              <ul>
-                {result.key_points.map((point, index) => (
-                  <li key={index}>{point}</li>
-                ))}
-              </ul>
-
-              <h2>Decisions</h2>
-              {result.decisions.length === 0 ? (
-                <p>No decisions recorded.</p>
-              ) : (
-                <ul>
-                  {result.decisions.map((decision, index) => (
-                    <li key={index}>{decision}</li>
-                  ))}
-                </ul>
-              )}
-
-              <h2>Action Items</h2>
-              {result.action_items.length === 0 ? (
-                <p>No action items found.</p>
-              ) : (
-                <ul>
-                  {result.action_items.map((item, index) => (
-                    <li key={index}>
-                      <strong>{item.task}</strong> — Assigned to: {item.assignee}, Deadline: {item.deadline}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <h2>Topics</h2>
-              <p>{result.topics.join(', ')}</p>
-
-              <h2>Timestamped Transcript</h2>
-              <div className="transcript-box">
-                {result.segments.map((segment, index) => (
-                  <p key={index} className="transcript-line">
-                    <span className="timestamp">[{formatTime(segment.start)}]</span> {segment.text}
-                  </p>
-                ))}
-              </div>
-            </div>
-          )}
+          {result && renderResultsBlock(result)}
         </div>
       )}
     </div>
   )
-}
-
-function formatTime(seconds) {
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.floor(seconds % 60)
-  return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
 export default App

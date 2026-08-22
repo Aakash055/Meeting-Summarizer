@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import engine, Base, get_db
-from app.models import Meeting, TranscriptSegment, Summary, Topic, Decision, ActionItem
+from app.models import Meeting, TranscriptSegment, Summary, Topic, Decision, ActionItem, KeyPoint
 
 load_dotenv()
 
@@ -236,6 +236,9 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
     for decision_text in final_result["decisions"]:
         db.add(Decision(meeting_id=meeting.id, text=decision_text))
 
+    for point_text in final_result["key_points"]:
+        db.add(KeyPoint(meeting_id=meeting.id, text=point_text))
+
     for item in final_result["action_items"]:
         db.add(ActionItem(
             meeting_id=meeting.id,
@@ -289,6 +292,7 @@ def get_meeting(meeting_id: int, db: Session = Depends(get_db)):
             joinedload(Meeting.topics),
             joinedload(Meeting.decisions),
             joinedload(Meeting.action_items),
+            joinedload(Meeting.key_points),
         )
         .filter(Meeting.id == meeting_id)
         .first()
@@ -309,6 +313,7 @@ def get_meeting(meeting_id: int, db: Session = Depends(get_db)):
         ],
         "topics": [t.name for t in meeting.topics],
         "decisions": [d.text for d in meeting.decisions],
+        "key_points": [k.text for k in meeting.key_points],
         "action_items": [
             {
                 "task": a.task,
