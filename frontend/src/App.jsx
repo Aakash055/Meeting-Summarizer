@@ -51,11 +51,18 @@ function App() {
       <h1>Meeting Summarizer</h1>
 
       <div className="upload-section">
-        <input type="file" accept="audio/*,video/*" onChange={handleFileChange} />
+        <input type="file" accept="audio/*,video/*" onChange={handleFileChange} disabled={isUploading} />
         <button onClick={handleUpload} disabled={isUploading}>
           {isUploading ? 'Processing...' : 'Upload & Summarize'}
         </button>
       </div>
+
+      {isUploading && (
+        <div className="processing-indicator">
+          <div className="spinner"></div>
+          <p>Transcribing and analyzing your file — this can take a moment for longer recordings.</p>
+        </div>
+      )}
 
       {error && <p className="error-message">{error}</p>}
 
@@ -97,10 +104,25 @@ function App() {
 
           <h2>Topics</h2>
           <p>{result.topics.join(', ')}</p>
+
+          <h2>Timestamped Transcript</h2>
+          <div className="transcript-box">
+            {result.segments.map((segment, index) => (
+              <p key={index} className="transcript-line">
+                <span className="timestamp">[{formatTime(segment.start)}]</span> {segment.text}
+              </p>
+            ))}
+          </div>
         </div>
       )}
     </div>
   )
+}
+
+function formatTime(seconds) {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
 export default App
