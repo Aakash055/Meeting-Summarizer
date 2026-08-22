@@ -3,9 +3,15 @@ import json
 import whisper
 from dotenv import load_dotenv
 from google import genai
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from sqlalchemy.orm import Session
+
+from app.database import engine, Base, get_db
+from app.models import Meeting, TranscriptSegment, Summary, Topic, Decision, ActionItem
 
 load_dotenv()
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -158,7 +164,7 @@ def read_root():
 
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=400,
@@ -177,6 +183,11 @@ async def upload_file(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         buffer.write(content)
 
+    meeting = Meeting(filename=file.filename, status="processing")
+    db.add(meeting)
+    db.commit()
+    db.refresh(meeting)
+
     result = whisper_model.transcribe(file_path)
 
     segments = [
@@ -188,6 +199,15 @@ async def upload_file(file: UploadFile = File(...)):
         for segment in result["segments"]
     ]
 
+    for seg in segments:
+        db_segment = TranscriptSegment(
+            meeting_id=meeting.id,
+            start_time=seg["start"],
+            end_time=seg["end"],
+            text=seg["text"]
+        )
+        db.add(db_segment)
+
     chunks = chunk_segments(segments, max_tokens_per_chunk=1500)
 
     chunk_results = []
@@ -198,7 +218,29 @@ async def upload_file(file: UploadFile = File(...)):
 
     final_result = merge_chunk_results(chunk_results)
 
+    db_summary = Summary(meeting_id=meeting.id, summary_text=final_result["summary"])
+    db.add(db_summary)
+
+    for topic_name in final_result["topics"]:
+        db.add(Topic(meeting_id=meeting.id, name=topic_name))
+
+    for decision_text in final_result["decisions"]:
+        db.add(Decision(meeting_id=meeting.id, text=decision_text))
+
+    for item in final_result["action_items"]:
+        db.add(ActionItem(
+            meeting_id=meeting.id,
+            task=item.get("task", ""),
+            assignee=item.get("assignee", "Not specified"),
+            deadline=item.get("deadline", "Not specified"),
+            source=item.get("source", "")
+        ))
+
+    meeting.status = "done"
+    db.commit()
+
     return {
+        "meeting_id": meeting.id,
         "filename": file.filename,
         "content_type": file.content_type,
         "size_bytes": len(content),
