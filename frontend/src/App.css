@@ -88,6 +88,36 @@
   color: #fff;
 }
 
+.empty-state {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  background-color: #1e1e1e;
+  border-radius: 8px;
+  border: 1px dashed #444;
+}
+
+.empty-state-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+}
+
+.empty-state-subtitle {
+  color: #999;
+  margin: 0 0 1.2rem 0;
+  font-size: 0.9rem;
+}
+
+.empty-state button {
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+  background-color: #7c8aff;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-weight: 500;
+}
+
 .meetings-list {
   display: flex;
   flex-direction: column;
@@ -115,6 +145,28 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.4rem;
+}
+
+.meeting-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.delete-button {
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.delete-button:hover {
+  color: #d32f2f;
+  background-color: rgba(211, 47, 47, 0.1);
 }
 
 .status-badge {
@@ -291,4 +343,57 @@
   color: #7c8aff;
   font-weight: 600;
   margin-right: 0.3rem;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-box {
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 400px;
+  width: 90%;
+}
+
+.modal-box h3 {
+  margin: 0 0 0.75rem 0;
+}
+
+.modal-box p {
+  color: #bbb;
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.modal-actions button {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: transparent;
+  color: inherit;
+}
+
+.danger-button {
+  background-color: #d32f2f !important;
+  border-color: #d32f2f !important;
+  color: #fff !important;
 }

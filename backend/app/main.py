@@ -381,6 +381,27 @@ def get_meeting(meeting_id: int, db: Session = Depends(get_db), current_user: Us
     }
 
 
+@app.delete("/meetings/{meeting_id}")
+def delete_meeting(meeting_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    meeting = (
+        db.query(Meeting)
+        .filter(Meeting.id == meeting_id, Meeting.user_id == current_user.id)
+        .first()
+    )
+
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    file_path = os.path.join(UPLOAD_DIR, meeting.filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    db.delete(meeting)
+    db.commit()
+
+    return {"message": "Meeting deleted successfully"}
+
+
 @app.get("/search")
 def search_transcripts(q: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if not q or len(q.strip()) == 0:

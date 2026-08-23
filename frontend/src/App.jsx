@@ -24,6 +24,8 @@ function App() {
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
+  const [meetingPendingDelete, setMeetingPendingDelete] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     if (view === 'dashboard' && token) {
@@ -107,6 +109,38 @@ function App() {
       console.error('Failed to load meeting:', err)
     } finally {
       setIsLoadingDetail(false)
+    }
+  }
+
+  function confirmDelete(event, meeting) {
+    event.stopPropagation()
+    setMeetingPendingDelete(meeting)
+  }
+
+  function cancelDelete() {
+    setMeetingPendingDelete(null)
+  }
+
+  async function performDelete() {
+    if (!meetingPendingDelete) return
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`${API_BASE}/meetings/${meetingPendingDelete.id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete meeting')
+      }
+
+      setMeetings((prev) => prev.filter((m) => m.id !== meetingPendingDelete.id))
+      setMeetingPendingDelete(null)
+    } catch (err) {
+      console.error('Delete failed:', err)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -322,7 +356,11 @@ function App() {
           {isLoadingMeetings && <p>Loading meetings...</p>}
 
           {!isLoadingMeetings && meetings.length === 0 && (
-            <p>No meetings yet. Upload your first recording to get started.</p>
+            <div className="empty-state">
+              <p className="empty-state-title">No meetings yet</p>
+              <p className="empty-state-subtitle">Upload your first recording to get a summary, action items, and a searchable transcript.</p>
+              <button onClick={() => setView('upload')}>Upload a Recording</button>
+            </div>
           )}
 
           <div className="meetings-list">
@@ -334,9 +372,18 @@ function App() {
               >
                 <div className="meeting-card-header">
                   <strong>{meeting.filename}</strong>
-                  <span className={`status-badge status-${meeting.status}`}>
-                    {meeting.status}
-                  </span>
+                  <div className="meeting-card-actions">
+                    <span className={`status-badge status-${meeting.status}`}>
+                      {meeting.status}
+                    </span>
+                    <button
+                      className="delete-button"
+                      onClick={(e) => confirmDelete(e, meeting)}
+                      title="Delete meeting"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
                 <p className="meeting-date">{formatDate(meeting.created_at)}</p>
                 <p className="meeting-summary-preview">
@@ -425,6 +472,21 @@ function App() {
           {error && <p className="error-message">{error}</p>}
 
           {result && renderResultsBlock(result)}
+        </div>
+      )}
+
+      {meetingPendingDelete && (
+        <div className="modal-overlay" onClick={cancelDelete}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <h3>Delete meeting?</h3>
+            <p>This will permanently delete "{meetingPendingDelete.filename}" and all its data. This cannot be undone.</p>
+            <div className="modal-actions">
+              <button onClick={cancelDelete} disabled={isDeleting}>Cancel</button>
+              <button onClick={performDelete} className="danger-button" disabled={isDeleting}>
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
