@@ -11,6 +11,7 @@ from app.database import engine, Base, get_db
 from app.models import Meeting, TranscriptSegment, Summary, Topic, Decision, ActionItem, KeyPoint, User
 from app.schemas import UserRegister, UserLogin, TokenResponse
 from app.auth import hash_password, verify_password, create_access_token, decode_access_token
+from app.utils import estimate_tokens, chunk_segments, merge_action_items, deduplicate_topics
 
 load_dotenv()
 
@@ -89,32 +90,6 @@ Write ONE cohesive summary (3-5 sentences) of the entire meeting/lecture based o
 """
 
 
-def estimate_tokens(text: str) -> int:
-    return len(text) // 4
-
-
-def chunk_segments(segments, max_tokens_per_chunk=1500):
-    chunks = []
-    current_chunk_segments = []
-    current_chunk_tokens = 0
-
-    for segment in segments:
-        segment_tokens = estimate_tokens(segment["text"])
-
-        if current_chunk_tokens + segment_tokens > max_tokens_per_chunk and current_chunk_segments:
-            chunks.append(current_chunk_segments)
-            current_chunk_segments = []
-            current_chunk_tokens = 0
-
-        current_chunk_segments.append(segment)
-        current_chunk_tokens += segment_tokens
-
-    if current_chunk_segments:
-        chunks.append(current_chunk_segments)
-
-    return chunks
-
-
 def summarize_chunk(transcript_text: str) -> dict:
     prompt = SUMMARY_PROMPT_TEMPLATE.format(transcript_text=transcript_text)
 
@@ -138,16 +113,17 @@ def merge_chunk_results(chunk_results: list) -> dict:
 
     all_key_points = []
     all_decisions = []
-    all_action_items = []
-    all_topics = []
 
     for result in chunk_results:
         all_key_points.extend(result.get("key_points", []))
         all_decisions.extend(result.get("decisions", []))
-        all_action_items.extend(result.get("action_items", []))
-        all_topics.extend(result.get("topics", []))
 
-    unique_topics = list(dict.fromkeys(all_topics))
+    all_action_items = merge_action_items(chunk_results)
+
+    all_topics = []
+    for result in chunk_results:
+        all_topics.extend(result.get("topics", []))
+    unique_topics = deduplicate_topics(all_topics)
 
     summaries_text = "\n".join(
         f"Segment {i + 1}: {result['summary']}"
