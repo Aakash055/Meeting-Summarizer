@@ -43,7 +43,7 @@ MAX_FILE_SIZE_MB = 200
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 print("Loading Whisper model... (this happens once at startup)")
-whisper_model = whisper.load_model("base")
+whisper_model = whisper.load_model("tiny")
 print("Whisper model loaded.")
 
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
