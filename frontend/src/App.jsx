@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 
-const API_BASE = 'http://127.0.0.1:8000'
+const API_BASE = 'https://meeting-summarizer-i9fm.onrender.com'
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'))
