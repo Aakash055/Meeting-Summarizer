@@ -35,6 +35,7 @@ ALLOWED_CONTENT_TYPES = {
     "audio/wav",
     "audio/x-wav",
     "audio/mp4",
+    "audio/x-m4a"
     "video/mp4",
     "video/quicktime",
 }
