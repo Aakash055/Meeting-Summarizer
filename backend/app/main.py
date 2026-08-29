@@ -1,6 +1,6 @@
 import os
 import json
-import whisper
+from faster_whisper import WhisperModel
 from dotenv import load_dotenv
 from google import genai
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Header
@@ -34,8 +34,9 @@ ALLOWED_CONTENT_TYPES = {
     "audio/mpeg",
     "audio/wav",
     "audio/x-wav",
+    "audio/wave",
     "audio/mp4",
-    "audio/x-m4a"
+    "audio/x-m4a",
     "video/mp4",
     "video/quicktime",
 }
@@ -44,7 +45,10 @@ MAX_FILE_SIZE_MB = 200
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 print("Loading Whisper model... (this happens once at startup)")
-whisper_model = whisper.load_model("tiny")
+# compute_type="int8" quantizes the model to use far less RAM than the
+# default float32 openai-whisper uses. device="cpu" is required since
+# Render's free tier has no GPU.
+whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
 print("Whisper model loaded.")
 
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -223,16 +227,23 @@ async def upload_file(
     db.commit()
     db.refresh(meeting)
 
-    result = whisper_model.transcribe(file_path)
+    # faster-whisper's transcribe() returns a generator of segments, not a
+    # single dict like openai-whisper does. We iterate it to build both the
+    # segment list and the full transcript text ourselves.
+    segments_generator, transcription_info = whisper_model.transcribe(file_path)
 
-    segments = [
-        {
-            "start": segment["start"],
-            "end": segment["end"],
-            "text": segment["text"].strip()
-        }
-        for segment in result["segments"]
-    ]
+    segments = []
+    full_text_parts = []
+    for seg in segments_generator:
+        text = seg.text.strip()
+        segments.append({
+            "start": seg.start,
+            "end": seg.end,
+            "text": text
+        })
+        full_text_parts.append(text)
+
+    full_transcript_text = " ".join(full_text_parts)
 
     for seg in segments:
         db_segment = TranscriptSegment(
@@ -282,7 +293,7 @@ async def upload_file(
         "filename": file.filename,
         "content_type": file.content_type,
         "size_bytes": len(content),
-        "transcript_text": result["text"],
+        "transcript_text": full_transcript_text,
         "segments": segments,
         "summary": final_result["summary"],
         "key_points": final_result["key_points"],
