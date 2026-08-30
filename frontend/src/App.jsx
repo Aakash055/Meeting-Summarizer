@@ -4,6 +4,12 @@ import './App.css'
 const API_BASE = 'https://meeting-summarizer-i9fm.onrender.com'
 
 function App() {
+  function renderSpacedText(text) {
+    return text.split('').map((char, i) => (
+      <span key={i}>{char === ' ' ? '\u00A0' : char}</span>
+    ))
+  }
+
   const [token, setToken] = useState(localStorage.getItem('token'))
   const [authView, setAuthView] = useState('login')
   const [authEmail, setAuthEmail] = useState('')
@@ -279,7 +285,10 @@ function App() {
   if (!token) {
     return (
       <div className="app-container auth-container">
-        <h1>Meeting Summarizer</h1>
+        <div className="brand brand-hero">
+          <span className="brand-title">NoteGrain</span>
+          <span className="brand-subtitle">{renderSpacedText('Meeting Summarizer')}</span>
+        </div>
         <div className="auth-box">
           <div className="auth-tabs">
             <button
@@ -325,7 +334,10 @@ function App() {
   return (
     <div className="app-container">
       <div className="nav-bar">
-        <h1>Meeting Summarizer</h1>
+        <div className="brand">
+          <span className="brand-title">NoteGrain</span>
+          <span className="brand-subtitle">{renderSpacedText('Meeting Summarizer')}</span>
+        </div>
         <div className="nav-buttons">
           <button
             className={view === 'dashboard' ? 'nav-active' : ''}
