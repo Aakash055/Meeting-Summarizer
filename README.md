@@ -1,4 +1,4 @@
-# Meeting/Lecture Summarizer with Action Items
+# NoteGrain — Meeting Summarizer
 
 A full-stack AI web app that turns a raw meeting or lecture recording into a timestamped transcript, an AI-generated summary, key points, decisions, and action items (with assignee, deadline, and source quote) — automatically.
 
